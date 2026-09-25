@@ -8,9 +8,38 @@
     "start": "electron .",
     "check": "node --check main.cjs && node --check preload.cjs && node --check modules.cjs && node --check renderer.js",
     "test": "node --test test/*.test.cjs",
-    "verify": "npm run check && npm test"
+    "verify": "npm run check && npm test",
+    "dist:win": "npm run verify && electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "^37.3.1"
+    "electron": "^37.3.1",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "org.homehospital.platform",
+    "productName": "Home Hospital Platform",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "modules.cjs",
+      "preload.cjs",
+      "renderer.js",
+      "index.html",
+      "styles.css",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Home Hospital Platform"
+    }
   }
 }

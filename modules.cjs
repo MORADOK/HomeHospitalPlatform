@@ -4,7 +4,7 @@ const https = require('https');
 const { spawn } = require('child_process');
 
 const MODULE_NAMES = Object.freeze(['vaccine', 'ua-online']);
-const DEFAULT_UA_ONLINE_URL = 'https://labreport-haolauca6om7gqtufcm6ft.streamlit.app';
+const DEFAULT_UA_ONLINE_URL = 'https://labhomereport.streamlit.app/dashboard';
 
 function existingFile(candidate) {
   try { return Boolean(candidate) && fs.statSync(candidate).isFile(); } catch { return false; }
