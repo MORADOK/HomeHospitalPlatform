@@ -12,7 +12,7 @@
     "dist:win": "npm run verify && electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "^37.3.1",
+    "electron": "^44.4.5",
     "electron-builder": "^26.0.12"
   },
   "build": {
@@ -32,7 +32,9 @@
       "package.json"
     ],
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "nsis": {
       "oneClick": false,
