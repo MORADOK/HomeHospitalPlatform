@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Home Hospital desktop launcher for independent Vaccine and UA Report systems",
+  "author": "Home Hospital",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",

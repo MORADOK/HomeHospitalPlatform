@@ -5,3 +5,8 @@ release/
 .env
 .env.*
 !.env.example
+
+# Local AI coding skills/tool metadata (not part of the shipped app)
+.agents/
+.claude/
+skills-lock.json
