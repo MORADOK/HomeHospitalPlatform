@@ -30,9 +30,12 @@
       "renderer.js",
       "index.html",
       "styles.css",
+      "logo.png",
+      "uninstallerIcon.ico",
       "package.json"
     ],
     "win": {
+      "icon": "uninstallerIcon.ico",
       "target": [
         "nsis"
       ]
@@ -42,7 +45,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Home Hospital Platform"
+      "shortcutName": "Home Hospital Platform",
+      "installerIcon": "uninstallerIcon.ico",
+      "uninstallerIcon": "uninstallerIcon.ico"
     }
   }
 }
