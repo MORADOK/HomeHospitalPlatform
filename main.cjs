@@ -96,21 +96,29 @@ function isAllowedModuleUrl(name, value) {
 }
 
 function getShellMetrics(width, height) {
-  if (width <= 820) return { sidebarWidth: 78, headerHeight: 64, footerHeight: 28 };
-  if (width <= 1050) return { sidebarWidth: 196, headerHeight: 72, footerHeight: 30 };
-  return { sidebarWidth: 232, headerHeight: 72, footerHeight: 30 };
+  // Keep these values in sync with CSS breakpoints. A narrower shell leaves more
+  // horizontal room for legacy DOC/Streamlit pages without sacrificing navigation.
+  if (width <= 820) return { sidebarWidth: 68, headerHeight: 58, footerHeight: 26 };
+  if (width <= 1100) return { sidebarWidth: 176, headerHeight: 64, footerHeight: 28 };
+  return { sidebarWidth: 210, headerHeight: 66, footerHeight: 28 };
+}
+function getModuleZoom(name, viewWidth, viewHeight) {
+  // Legacy DOC and dashboard pages were designed for a wider browser canvas.
+  // Scale the embedded renderer (not the shell) so the complete right edge remains visible.
+  const idealWidth = name === 'documents-local' ? 1180 : name === 'ua-online' ? 1120 : 1080;
+  const widthScale = Math.min(1, viewWidth / idealWidth);
+  const heightScale = viewHeight < 650 ? Math.min(1, viewHeight / 650) : 1;
+  return Math.max(0.72, Math.min(widthScale, heightScale));
 }
 function layoutModuleView() {
   if (!mainWindow || !moduleView || mainWindow.getBrowserView() !== moduleView) return;
   const [width, height] = mainWindow.getContentSize();
   const { sidebarWidth, headerHeight, footerHeight } = getShellMetrics(width, height);
-  moduleView.setBounds({
-    x: sidebarWidth,
-    y: headerHeight,
-    width: Math.max(0, width - sidebarWidth),
-    height: Math.max(0, height - headerHeight - footerHeight)
-  });
+  const viewWidth = Math.max(0, width - sidebarWidth);
+  const viewHeight = Math.max(0, height - headerHeight - footerHeight);
+  moduleView.setBounds({ x: sidebarWidth, y: headerHeight, width: viewWidth, height: viewHeight });
   moduleView.setAutoResize({ width: true, height: true });
+  try { moduleView.webContents.setZoomFactor(getModuleZoom(activeModule, viewWidth, viewHeight)); } catch (error) { console.error('Module zoom failed', error); }
 }
 function destroyModuleView() {
   if (!moduleView) return;
@@ -170,7 +178,7 @@ async function showModule(name) {
 }
 function createWindow() {
   const { width: workWidth, height: workHeight } = require('electron').screen.getPrimaryDisplay().workAreaSize;
-  mainWindow = new BrowserWindow({ width:Math.min(1280,workWidth),height:Math.min(820,workHeight),minWidth:760,minHeight:560,backgroundColor:'#f4f8f5',title:'Home Hospital Platform',icon:path.join(__dirname,'uninstallerIcon.ico'),autoHideMenuBar:true,show:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true} });
+  mainWindow = new BrowserWindow({ width:Math.min(1440,workWidth),height:Math.min(900,workHeight),minWidth:720,minHeight:520,backgroundColor:'#f4f8f5',title:'Home Hospital Platform',icon:path.join(__dirname,'uninstallerIcon.ico'),autoHideMenuBar:true,show:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true} });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => { if (url !== mainWindow.webContents.getURL()) event.preventDefault(); });
   mainWindow.on('resize', layoutModuleView);
