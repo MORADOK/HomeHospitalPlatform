@@ -24,7 +24,18 @@ jobs:
         run: npm ci
       - name: Verify
         run: npm run verify
-      - name: Publish Windows release
+      - name: Build Windows installer
+        run: npx electron-builder --win nsis --publish never
+      - name: Normalize update asset names
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          Copy-Item "dist/Home Hospital Platform Setup $version.exe" "dist/Home-Hospital-Platform-Setup-$version.exe" -Force
+          Copy-Item "dist/Home Hospital Platform Setup $version.exe.blockmap" "dist/Home-Hospital-Platform-Setup-$version.exe.blockmap" -Force
+      - name: Publish release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win nsis --publish always
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          gh release create "v$version" --repo "$env:GITHUB_REPOSITORY" --title "Home Hospital Platform v$version" --notes "Windows auto-update release." "dist/Home-Hospital-Platform-Setup-$version.exe" "dist/Home-Hospital-Platform-Setup-$version.exe.blockmap" "dist/latest.yml"
