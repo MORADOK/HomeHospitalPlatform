@@ -10,7 +10,8 @@
     "check": "node --check main.cjs && node --check preload.cjs && node --check modules.cjs && node --check renderer.js",
     "test": "node --test test/*.test.cjs",
     "verify": "npm run check && npm test",
-    "dist:win": "npm run verify && electron-builder --win nsis"
+    "dist:win": "npm run verify && electron-builder --win nsis",
+    "release:win": "npm run verify && electron-builder --win nsis --publish always"
   },
   "devDependencies": {
     "electron": "^44.4.5",
@@ -48,6 +49,15 @@
       "shortcutName": "Home Hospital Platform",
       "installerIcon": "uninstallerIcon.ico",
       "uninstallerIcon": "uninstallerIcon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "MORADOK",
+      "repo": "HomeHospitalPlatform",
+      "releaseType": "release"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
   }
 }

@@ -1,7 +1,9 @@
 const { app, BrowserWindow, BrowserView, ipcMain, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
-const { createModuleRegistry, isKnownModule } = require('./modules.cjs');
-const modules = createModuleRegistry();
+const { createModuleRegistry, isKnownModule, normalizeDocumentsUrl, DEFAULT_DOCUMENTS_LOCAL_URL } = require('./modules.cjs');
+let documentsUrl = DEFAULT_DOCUMENTS_LOCAL_URL;
+let modules;
 // This Windows host is currently rendering Electron's BrowserWindow as a fully black surface
 // with the default GPU path. Use software rendering for the platform shell to avoid the D3D
 // compositor failure; remote Vaccine/UA pages still run normally in Chromium.
@@ -10,6 +12,48 @@ app.commandLine.appendSwitch('disable-gpu-compositing');
 let mainWindow;
 let moduleView;
 let activeModule = null;
+let updateState = { status: 'idle', version: app.getVersion(), percent: 0, message: 'พร้อมตรวจสอบอัปเดต' };
+
+function publishUpdateState(patch) {
+  updateState = { ...updateState, ...patch };
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('platform:update:state-changed', updateState);
+}
+function setupAutoUpdater() {
+  if (!app.isPackaged) {
+    publishUpdateState({ status: 'dev', message: 'Auto Update ทำงานเมื่อใช้โปรแกรมที่ติดตั้งแล้ว' });
+    return;
+  }
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => publishUpdateState({ status: 'checking', percent: 0, message: 'กำลังตรวจสอบอัปเดต...' }));
+  autoUpdater.on('update-available', info => publishUpdateState({ status: 'available', availableVersion: info.version, percent: 0, message: `พบเวอร์ชันใหม่ ${info.version} กำลังดาวน์โหลด...` }));
+  autoUpdater.on('update-not-available', info => publishUpdateState({ status: 'current', version: info.version || app.getVersion(), percent: 0, message: 'เป็นเวอร์ชันล่าสุดแล้ว' }));
+  autoUpdater.on('download-progress', progress => publishUpdateState({ status: 'downloading', percent: Math.round(progress.percent || 0), message: `กำลังดาวน์โหลดอัปเดต ${Math.round(progress.percent || 0)}%` }));
+  autoUpdater.on('update-downloaded', info => publishUpdateState({ status: 'ready', availableVersion: info.version, percent: 100, message: `เวอร์ชัน ${info.version} พร้อมติดตั้ง` }));
+  autoUpdater.on('error', error => {
+    console.error('Auto update error', error);
+    publishUpdateState({ status: 'error', message: 'ตรวจสอบอัปเดตไม่สำเร็จ จะลองใหม่ครั้งถัดไป' });
+  });
+  setTimeout(() => autoUpdater.checkForUpdates().catch(error => console.error('Initial update check failed', error)), 5000);
+}
+
+function documentsSettingsPath() { return path.join(app.getPath('userData'), 'documents-settings.json'); }
+function loadDocumentsUrl() {
+  try {
+    const saved = require('fs').readFileSync(documentsSettingsPath(), 'utf8');
+    const parsed = JSON.parse(saved);
+    documentsUrl = normalizeDocumentsUrl(parsed?.url) || DEFAULT_DOCUMENTS_LOCAL_URL;
+  } catch { documentsUrl = DEFAULT_DOCUMENTS_LOCAL_URL; }
+  modules = createModuleRegistry({ documentsUrl });
+}
+function saveDocumentsUrl(value) {
+  const normalized = normalizeDocumentsUrl(value);
+  if (!normalized) return null;
+  require('fs').writeFileSync(documentsSettingsPath(), JSON.stringify({ url: normalized }, null, 2), 'utf8');
+  documentsUrl = normalized;
+  modules = createModuleRegistry({ documentsUrl });
+  return normalized;
+}
 
 function isAllowedModuleUrl(name, value) {
   if (!isKnownModule(name) || typeof value !== 'string') return false;
@@ -17,7 +61,7 @@ function isAllowedModuleUrl(name, value) {
     const target = new URL(value);
     const configured = new URL(modules[name].url);
     if (name === 'documents-local') {
-      return target.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(target.hostname) && target.port === '8501';
+      return ['http:', 'https:'].includes(target.protocol) && target.origin === configured.origin;
     }
     if (target.protocol !== 'https:') return false;
     if (target.hostname === configured.hostname) return true;
@@ -38,10 +82,21 @@ function isAllowedModuleUrl(name, value) {
   } catch { return false; }
 }
 
+function getShellMetrics(width, height) {
+  if (width <= 820) return { sidebarWidth: 78, headerHeight: 64, footerHeight: 28 };
+  if (width <= 1050) return { sidebarWidth: 196, headerHeight: 72, footerHeight: 30 };
+  return { sidebarWidth: 232, headerHeight: 72, footerHeight: 30 };
+}
 function layoutModuleView() {
   if (!mainWindow || !moduleView || mainWindow.getBrowserView() !== moduleView) return;
   const [width, height] = mainWindow.getContentSize();
-  moduleView.setBounds({ x: 210, y: 64, width: Math.max(500, width - 210), height: Math.max(400, height - 98) });
+  const { sidebarWidth, headerHeight, footerHeight } = getShellMetrics(width, height);
+  moduleView.setBounds({
+    x: sidebarWidth,
+    y: headerHeight,
+    width: Math.max(0, width - sidebarWidth),
+    height: Math.max(0, height - headerHeight - footerHeight)
+  });
   moduleView.setAutoResize({ width: true, height: true });
 }
 function destroyModuleView() {
@@ -101,7 +156,8 @@ async function showModule(name) {
   return result;
 }
 function createWindow() {
-  mainWindow = new BrowserWindow({ width:1280,height:820,minWidth:1000,minHeight:650,backgroundColor:'#f4f8f5',title:'Home Hospital Platform',icon:path.join(__dirname,'uninstallerIcon.ico'),autoHideMenuBar:true,show:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true} });
+  const { width: workWidth, height: workHeight } = require('electron').screen.getPrimaryDisplay().workAreaSize;
+  mainWindow = new BrowserWindow({ width:Math.min(1280,workWidth),height:Math.min(820,workHeight),minWidth:760,minHeight:560,backgroundColor:'#f4f8f5',title:'Home Hospital Platform',icon:path.join(__dirname,'uninstallerIcon.ico'),autoHideMenuBar:true,show:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true} });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => { if (url !== mainWindow.webContents.getURL()) event.preventDefault(); });
   mainWindow.on('resize', layoutModuleView);
@@ -117,6 +173,23 @@ function createWindow() {
   }).catch((error) => console.error('Platform loadFile failed', error));
 }
 ipcMain.handle('platform:status', async () => Object.fromEntries(await Promise.all(Object.entries(modules).map(async ([name,module]) => [name,await module.status()]))));
+ipcMain.handle('platform:update:state', async () => updateState);
+ipcMain.handle('platform:update:check', async () => {
+  if (!app.isPackaged) return { ok: false, ...updateState };
+  try { await autoUpdater.checkForUpdates(); return { ok: true, ...updateState }; }
+  catch (error) { console.error(error); return { ok: false, ...updateState }; }
+});
+ipcMain.handle('platform:update:install', async () => {
+  if (updateState.status !== 'ready') return { ok: false, message: 'ยังไม่มีอัปเดตที่พร้อมติดตั้ง' };
+  setImmediate(() => autoUpdater.quitAndInstall(false, true));
+  return { ok: true, message: 'กำลังรีสตาร์ตเพื่อติดตั้งอัปเดต' };
+});
+ipcMain.handle('platform:documents-url:get', async () => ({ ok: true, url: documentsUrl }));
+ipcMain.handle('platform:documents-url:set', async (_event, value) => {
+  const normalized = saveDocumentsUrl(value);
+  if (!normalized) return { ok: false, message: 'URL ต้องขึ้นต้นด้วย http:// หรือ https://' };
+  return { ok: true, url: normalized, message: 'บันทึกที่อยู่ระบบบัตรนัด / ใบเสร็จแล้ว' };
+});
 ipcMain.handle('platform:navigate', async (_event, name) => {
   if (isKnownModule(name)) { try { await showModule(name); return { ok:true,message:`${modules[name].label} เปิดภายในแพลตฟอร์มแล้ว` }; } catch(error) { console.error(error); return { ok:false,message:`โหลด ${modules[name].label} ไม่สำเร็จ` }; } }
   return { ok:false,message:'ไม่รู้จักหน้านี้' };
@@ -125,5 +198,5 @@ ipcMain.handle('platform:launch', async (_event, name) => {
   if (!isKnownModule(name)) return { ok:false,message:'ไม่รู้จักโมดูลนี้' };
   try { await showModule(name); return { ok:true,message:`${modules[name].label} เปิดภายในแพลตฟอร์มแล้ว` }; } catch(error) { console.error(error); return { ok:false,message:`โหลด ${modules[name].label} ไม่สำเร็จ` }; }
 });
-app.whenReady().then(() => { createWindow(); app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow()); });
+app.whenReady().then(() => { loadDocumentsUrl(); createWindow(); setupAutoUpdater(); app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow()); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
