@@ -14,8 +14,16 @@ let moduleView;
 let activeModule = null;
 let updateState = { status: 'idle', version: app.getVersion(), percent: 0, message: 'พร้อมตรวจสอบอัปเดต' };
 
+function updaterLogPath() { return path.join(app.getPath('userData'), 'updater.log'); }
+function writeUpdaterLog(event, detail = '') {
+  try {
+    const line = `[${new Date().toISOString()}] ${event}${detail ? `: ${String(detail).replace(/\r?\n/g, ' ')}` : ''}\n`;
+    require('fs').appendFileSync(updaterLogPath(), line, 'utf8');
+  } catch (error) { console.error('Updater log write failed', error); }
+}
 function publishUpdateState(patch) {
-  updateState = { ...updateState, ...patch };
+  updateState = { ...updateState, ...patch, version: app.getVersion() };
+  writeUpdaterLog(updateState.status, updateState.message);
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('platform:update:state-changed', updateState);
 }
 function setupAutoUpdater() {
@@ -32,9 +40,14 @@ function setupAutoUpdater() {
   autoUpdater.on('update-downloaded', info => publishUpdateState({ status: 'ready', availableVersion: info.version, percent: 100, message: `เวอร์ชัน ${info.version} พร้อมติดตั้ง` }));
   autoUpdater.on('error', error => {
     console.error('Auto update error', error);
-    publishUpdateState({ status: 'error', message: 'ตรวจสอบอัปเดตไม่สำเร็จ จะลองใหม่ครั้งถัดไป' });
+    const detail = error?.stack || error?.message || String(error);
+    writeUpdaterLog('ERROR DETAIL', detail);
+    publishUpdateState({ status: 'error', errorDetail: error?.message || String(error), message: `อัปเดตไม่สำเร็จ: ${error?.message || String(error)}` });
   });
-  setTimeout(() => autoUpdater.checkForUpdates().catch(error => console.error('Initial update check failed', error)), 5000);
+  setTimeout(() => autoUpdater.checkForUpdates().catch(error => {
+    writeUpdaterLog('INITIAL CHECK ERROR', error?.stack || error?.message || String(error));
+    console.error('Initial update check failed', error);
+  }), 5000);
 }
 
 function documentsSettingsPath() { return path.join(app.getPath('userData'), 'documents-settings.json'); }
