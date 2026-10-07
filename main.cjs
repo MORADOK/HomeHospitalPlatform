@@ -96,11 +96,10 @@ function isAllowedModuleUrl(name, value) {
 }
 
 function getShellMetrics(width, height) {
-  // Keep these values in sync with CSS breakpoints. A narrower shell leaves more
-  // horizontal room for legacy DOC/Streamlit pages without sacrificing navigation.
-  if (width <= 820) return { sidebarWidth: 68, headerHeight: 58, footerHeight: 26 };
-  if (width <= 1100) return { sidebarWidth: 176, headerHeight: 64, footerHeight: 28 };
-  return { sidebarWidth: 210, headerHeight: 66, footerHeight: 28 };
+  // Platform navigation lives in a compact top bar so embedded modules get the full width.
+  if (width <= 760) return { sidebarWidth: 0, headerHeight: 54, footerHeight: 20 };
+  if (width <= 1050) return { sidebarWidth: 0, headerHeight: 58, footerHeight: 22 };
+  return { sidebarWidth: 0, headerHeight: 62, footerHeight: 24 };
 }
 function getModuleZoom(name, viewWidth, viewHeight) {
   // Legacy DOC and dashboard pages were designed for a wider browser canvas.
