@@ -116,7 +116,8 @@ function layoutModuleView() {
   const viewWidth = Math.max(0, width - sidebarWidth);
   const viewHeight = Math.max(0, height - headerHeight - footerHeight);
   moduleView.setBounds({ x: sidebarWidth, y: headerHeight, width: viewWidth, height: viewHeight });
-  moduleView.setAutoResize({ width: true, height: true });
+  // Bounds are controlled centrally; BrowserView autoResize can race with window transitions.
+  moduleView.setAutoResize({ width: false, height: false });
   try { moduleView.webContents.setZoomFactor(getModuleZoom(activeModule, viewWidth, viewHeight)); } catch (error) { console.error('Module zoom failed', error); }
 }
 function destroyModuleView() {
@@ -181,6 +182,13 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => { if (url !== mainWindow.webContents.getURL()) event.preventDefault(); });
   mainWindow.on('resize', layoutModuleView);
+  mainWindow.on('maximize', layoutModuleView);
+  mainWindow.on('unmaximize', layoutModuleView);
+  mainWindow.on('enter-full-screen', layoutModuleView);
+  mainWindow.on('leave-full-screen', layoutModuleView);
+  mainWindow.on('restore', layoutModuleView);
+  mainWindow.on('show', layoutModuleView);
+  mainWindow.webContents.on('did-finish-load', layoutModuleView);
   mainWindow.on('closed', () => { mainWindow = null; moduleView = null; activeModule = null; });
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     console.error('Platform shell failed to load', { errorCode, errorDescription, validatedURL });
